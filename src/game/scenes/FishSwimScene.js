@@ -185,6 +185,12 @@ export class FishSwimScene extends Phaser.Scene {
       this.hud.usernameInput.addEventListener("blur", () => {
         this.input.keyboard.enabled = true;
       });
+
+      ["keydown", "keyup", "keypress"].forEach((eventName) => {
+        this.hud.usernameInput.addEventListener(eventName, (event) => {
+          event.stopPropagation();
+        });
+      });
     }
 
     this.hud.bindStart(async (username) => {
