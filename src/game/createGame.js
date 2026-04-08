@@ -3,7 +3,8 @@ import { GAME_HEIGHT, GAME_WIDTH } from "./constants.js";
 import { FishSwimScene } from "./scenes/FishSwimScene.js";
 
 export function createGame() {
-  const debugBodies = new URLSearchParams(window.location.search).get("debugBodies") === "1";
+  const debugBodies = import.meta.env.DEV
+    && new URLSearchParams(window.location.search).get("debugBodies") === "1";
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     width: GAME_WIDTH,

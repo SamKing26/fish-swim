@@ -32,7 +32,7 @@ This project now uses local `vite` and `phaser` dependencies.
 - Touch upper half: move up
 - Touch lower half: move down
 - `Space`: restart after game over
-- `D`: toggle collision debug bodies
+- `D`: toggle collision debug bodies in local development only
 
 ## Included MVP Features
 
@@ -49,5 +49,24 @@ This project now uses local `vite` and `phaser` dependencies.
 
 ## Collision Tuning
 
-- Open the game with `?debugBodies=1` to start with collision overlays visible
-- Press `D` any time to toggle fish, trap, and boost hitboxes
+- Open the game with `?debugBodies=1` to start with collision overlays visible in local development
+- Press `D` any time to toggle fish, trap, and boost hitboxes in local development
+
+## Global Leaderboard On Vercel
+
+The repo now includes a Vercel Function at [api/leaderboard.js](/c:/Users/user/FISH%20SWIM/api/leaderboard.js) and a browser client at [leaderboardClient.js](/c:/Users/user/FISH%20SWIM/src/game/services/leaderboardClient.js).
+
+It is designed for anonymous username + score submissions and falls back to local browser leaderboard data when the backend is not configured.
+
+To make the leaderboard shared for all players on Vercel:
+
+1. Create an Upstash Redis database from the Vercel Marketplace
+2. Add these project environment variables in Vercel:
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
+3. Redeploy the project
+
+Notes:
+- No login is required
+- Scores are public and anonymous, so basic validation is included but this is not anti-cheat secure
+- Production builds ignore `?debugBodies=1` and the `D` hotkey starts disabled

@@ -4,45 +4,136 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>FISH SWIM</title>
+  <style>
+    html, body, #app, #game-shell {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #game-shell {
+      position: relative;
+      overflow: hidden;
+      background: #041522;
+    }
+
+    .overlay {
+      display: none;
+    }
+
+    #start-overlay {
+      position: absolute;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      background: rgba(1, 9, 16, 0.45);
+    }
+
+    #start-overlay.visible {
+      display: flex;
+    }
+
+    #start-overlay .landing-deco,
+    #start-overlay .trap-showcase,
+    #start-overlay .trap-showcase img,
+    #start-overlay .boost-guide-item img {
+      visibility: hidden;
+    }
+  </style>
 </head>
 <body>
   <div id="app">
     <div id="game-shell">
       <div id="game"></div>
+      <button id="menu-button" class="menu-button hidden" type="button" aria-label="Open menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
       <div id="hud" class="panel">
-        <div class="hud-row">
-          <div class="stat">
-            <span class="label">Score</span>
-            <span id="score">0</span>
-          </div>
-          <div class="stat">
-            <span class="label">Best</span>
-            <span id="best-score">0</span>
-          </div>
-          <div class="stat">
-            <span class="label">Speed</span>
-            <span id="speed">1.0x</span>
-          </div>
-          <div class="stat">
-            <span class="label">Boost</span>
-            <span id="boost-status">Ready</span>
-          </div>
+        <div class="score-shell">
+          <div class="score-chip">SCORE</div>
+          <div id="score" class="score-value">0</div>
+          <div id="boost-status" class="boost-timer hidden"></div>
         </div>
-        <div class="hint">W / Up = rise, S / Down = dive, tap upper/lower half on mobile</div>
       </div>
       <div id="start-overlay" class="overlay visible">
-        <div class="panel overlay-card">
-          <h1>FISH SWIM</h1>
-          <p>Swim through the reef, dodge traps, grab glowing speed bubbles, and survive as the ocean gets faster.</p>
-          <button id="start-button" type="button">Start Swim</button>
+        <div class="landing-backdrop"></div>
+        <div class="panel trap-showcase">
+          <img src="/game-assets/FISH SWIM ASSET/trap-assets/Stone_bot.png" alt="">
+          <img src="/game-assets/FISH SWIM ASSET/trap-assets/Bomb.png" alt="">
+          <img src="/game-assets/FISH SWIM ASSET/trap-assets/Small-bomb.png" alt="">
+          <img src="/game-assets/FISH SWIM ASSET/trap-assets/Chain_top.png" alt="">
+        </div>
+        <img class="landing-deco landing-anchor" src="/game-assets/FISH SWIM ASSET/trap-assets/Anchor.png" alt="">
+        <img class="landing-deco landing-bubble" src="/game-assets/FISH SWIM ASSET/boost-assets/Pearl.png" alt="">
+        <img class="landing-deco landing-barrel" src="/game-assets/FISH SWIM ASSET/trap-assets/Barrel_2.png" alt="">
+        <img class="landing-deco landing-crown" src="/game-assets/FISH SWIM ASSET/boost-assets/Crown.png" alt="">
+        <div class="landing-grid">
+          <section class="panel landing-mode-card">
+            <div class="landing-mode-kicker">Mode</div>
+            <h2>Arcade Mode</h2>
+            <button id="start-button" type="button">Play</button>
+            <div class="boost-guide">
+              <div class="boost-guide-title">Boosts</div>
+              <div class="boost-guide-list">
+                <div class="boost-guide-item">
+                  <img src="/game-assets/FISH SWIM ASSET/boost-assets/Acceleration.png" alt="">
+                  <span>Speed</span>
+                </div>
+                <div class="boost-guide-item">
+                  <img src="/game-assets/FISH SWIM ASSET/boost-assets/Shield.png" alt="">
+                  <span>Immune</span>
+                </div>
+                <div class="boost-guide-item">
+                  <img src="/game-assets/FISH SWIM ASSET/boost-assets/Crown.png" alt="">
+                  <span>Speed + Immune</span>
+                </div>
+                <div class="boost-guide-item">
+                  <img src="/game-assets/FISH SWIM ASSET/boost-assets/Pearl.png" alt="">
+                  <span>Double Score</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="landing-center">
+            <h1 class="landing-title">FISH SWIM</h1>
+            <label class="username-field" for="username-input">
+              <span>Username</span>
+              <input id="username-input" type="text" maxlength="16" placeholder="Player name">
+            </label>
+          </section>
+
+          <section class="panel landing-mode-card landing-mode-card-soon">
+            <div class="landing-mode-kicker">Mode</div>
+            <h2>Fish World</h2>
+            <button type="button" disabled>Coming Soon</button>
+          </section>
         </div>
       </div>
       <div id="game-over-overlay" class="overlay">
-        <div class="panel overlay-card">
-          <h2>Run Over</h2>
-          <p>Final Score: <strong id="final-score">0</strong></p>
-          <p>Best Score: <strong id="final-best-score">0</strong></p>
-          <button id="restart-button" type="button">Swim Again</button>
+        <div class="panel overlay-card game-over-card">
+          <h2>Game Over</h2>
+          <p class="game-over-label">Latest Score</p>
+          <p class="game-over-score"><strong id="final-score">0</strong></p>
+          <div class="overlay-actions">
+            <button id="restart-button" type="button">Play Again</button>
+            <button id="lobby-button" class="ghost-button" type="button">Back to Lobby</button>
+          </div>
+        </div>
+        <div id="leaderboard-panel" class="panel leaderboard-panel">
+          <div class="leaderboard-title">Top 10 Leaderboard</div>
+          <div id="leaderboard-list" class="leaderboard-list"></div>
+        </div>
+      </div>
+      <div id="pause-overlay" class="overlay">
+        <div class="panel overlay-card pause-card">
+          <h2>Menu</h2>
+          <div class="overlay-actions">
+            <button id="resume-button" type="button">Resume</button>
+            <button id="pause-lobby-button" class="ghost-button" type="button">Back to Lobby</button>
+          </div>
         </div>
       </div>
       <div id="rotate-overlay" class="overlay rotate-overlay">

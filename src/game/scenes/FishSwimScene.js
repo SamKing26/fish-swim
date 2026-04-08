@@ -7,11 +7,13 @@ import {
   BOOST_SPAWN_MIN,
   GAME_HEIGHT,
   GAME_WIDTH,
+  LEADERBOARD_KEY,
   PLAYER_MAX_Y,
   PLAYER_MIN_Y,
   PLAYER_X,
   SCORE_RATE,
   STAGE_SCORE_THRESHOLDS,
+  USERNAME_KEY,
 } from "../constants.js";
 import { HudController } from "../ui/HudController.js";
 import { AudioManager } from "../systems/AudioManager.js";
@@ -21,6 +23,7 @@ import { BoostManager } from "../systems/BoostManager.js";
 import { getBoostConfig } from "../systems/BoostManager.js";
 import { TrapManager } from "../systems/TrapManager.js";
 import { createTextures } from "../systems/TextureFactory.js";
+import { fetchGlobalLeaderboard, submitGlobalLeaderboardScore } from "../services/leaderboardClient.js";
 
 const PLAYER_SCALE = 0.25;
 const PLAYER_HITBOX = {
@@ -49,6 +52,9 @@ export class FishSwimScene extends Phaser.Scene {
     this.audioManager = new AudioManager();
     this.hud = new HudController();
     this.bestScore = Number(window.localStorage.getItem(BEST_SCORE_KEY) || 0);
+    this.localLeaderboardEntries = this.loadLocalLeaderboard();
+    this.leaderboardEntries = [...this.localLeaderboardEntries];
+    this.currentUsername = window.localStorage.getItem(USERNAME_KEY) || "Player";
     this.touchDirection = 0;
     this.lastSwimSoundAt = 0;
     this.lastMilestone = 0;
@@ -56,6 +62,8 @@ export class FishSwimScene extends Phaser.Scene {
     this.lastWakeAt = 0;
     this.lastSwimBubbleAt = 0;
     this.playerIntentBlend = 0;
+    this.isPaused = false;
+    this.pausedAt = 0;
   }
 
   preload() {
@@ -100,8 +108,10 @@ export class FishSwimScene extends Phaser.Scene {
     this.bindUi();
     this.createCollisions();
     this.resetRunState();
-    this.hud.update({ score: 0, bestScore: this.bestScore, speedLabel: "1.0x", boostLabel: "Ready" });
+    this.hud.setUsername(this.currentUsername);
+    this.hud.update({ score: 0, bestScore: this.bestScore, speedLabel: "1.0x", boostLabel: "" });
     this.hud.showStart();
+    this.syncGlobalLeaderboard();
   }
 
   createAnimations() {
@@ -167,10 +177,13 @@ export class FishSwimScene extends Phaser.Scene {
   }
 
   bindUi() {
-    this.hud.bindStart(async () => {
+    this.hud.bindStart(async (username) => {
       this.audioManager.resume();
       await this.hud.enterImmersiveMode();
       this.audioManager.playButton();
+      this.currentUsername = (username || "Player").slice(0, 16);
+      window.localStorage.setItem(USERNAME_KEY, this.currentUsername);
+      this.hud.setUsername(this.currentUsername);
       this.startRun();
     });
 
@@ -179,6 +192,26 @@ export class FishSwimScene extends Phaser.Scene {
       await this.hud.enterImmersiveMode();
       this.audioManager.playButton();
       this.restartRun();
+    });
+
+    this.hud.bindLobby(() => {
+      this.audioManager.playButton();
+      this.backToLobby();
+    });
+
+    this.hud.bindMenu(() => {
+      this.audioManager.playButton();
+      this.pauseRun();
+    });
+
+    this.hud.bindResume(() => {
+      this.audioManager.playButton();
+      this.resumeRun();
+    });
+
+    this.hud.bindPauseLobby(() => {
+      this.audioManager.playButton();
+      this.backToLobby();
     });
   }
 
@@ -214,6 +247,8 @@ export class FishSwimScene extends Phaser.Scene {
     this.currentSpeed = BASE_SCROLL_SPEED;
     this.isPlaying = false;
     this.isGameOver = false;
+    this.isPaused = false;
+    this.pausedAt = 0;
     this.boostUntil = 0;
     this.nextTrapAt = 0;
     this.nextBoostAt = 0;
@@ -242,6 +277,9 @@ export class FishSwimScene extends Phaser.Scene {
     this.boostManager.reset();
     this.audioManager.stopBoostTimer();
     this.audioManager.startMusicLoop();
+    this.physics.world.resume();
+    this.anims.resumeAll();
+    this.tweens.resumeAll();
   }
 
   startRun() {
@@ -266,6 +304,49 @@ export class FishSwimScene extends Phaser.Scene {
     this.nextBoostAt = this.time.now + Phaser.Math.Between(BOOST_SPAWN_MIN - 1500, BOOST_SPAWN_MAX - 1000);
   }
 
+  backToLobby() {
+    this.resumeRun(true);
+    this.isPlaying = false;
+    this.isGameOver = false;
+    this.resetRunState();
+    this.hud.hideGameOver();
+    this.hud.showStart();
+  }
+
+  pauseRun() {
+    if (!this.isPlaying || this.isGameOver || this.isPaused) {
+      return;
+    }
+
+    this.isPaused = true;
+    this.pausedAt = this.time.now;
+    this.touchDirection = 0;
+    this.physics.world.pause();
+    this.anims.pauseAll();
+    this.tweens.pauseAll();
+    this.hud.showPause();
+  }
+
+  resumeRun(force = false) {
+    if (!this.isPaused && !force) {
+      return;
+    }
+
+    if (this.isPaused) {
+      const pausedDuration = this.time.now - this.pausedAt;
+      this.boostUntil += pausedDuration;
+      this.nextTrapAt += pausedDuration;
+      this.nextBoostAt += pausedDuration;
+    }
+
+    this.isPaused = false;
+    this.pausedAt = 0;
+    this.physics.world.resume();
+    this.anims.resumeAll();
+    this.tweens.resumeAll();
+    this.hud.hidePause();
+  }
+
   update(_, delta) {
     this.background.update(delta, this.score);
     this.updateDebugToggle();
@@ -276,6 +357,11 @@ export class FishSwimScene extends Phaser.Scene {
       if (this.isGameOver && Phaser.Input.Keyboard.JustDown(this.keys.restart)) {
         this.restartRun();
       }
+      return;
+    }
+
+    if (this.isPaused) {
+      this.renderDebugBodies();
       return;
     }
 
@@ -589,7 +675,7 @@ export class FishSwimScene extends Phaser.Scene {
   getBoostStatusLabel() {
     const boostLeft = Math.max(0, this.boostUntil - this.time.now);
     if (boostLeft <= 0 || !this.activeBoostType) {
-      return "Ready";
+      return "";
     }
 
     const labelMap = {
@@ -615,6 +701,7 @@ export class FishSwimScene extends Phaser.Scene {
   triggerGameOver() {
     this.isPlaying = false;
     this.isGameOver = true;
+    this.isPaused = false;
     this.player.setTint(0xff9aa2);
     this.audioManager.stopBoostTimer();
     this.audioManager.stopMusicLoop();
@@ -623,14 +710,17 @@ export class FishSwimScene extends Phaser.Scene {
 
     const score = Math.floor(this.score);
     this.bestScore = Math.max(this.bestScore, score);
+    this.localLeaderboardEntries = this.saveLocalLeaderboardScore(score, this.currentUsername);
+    this.leaderboardEntries = [...this.localLeaderboardEntries];
     window.localStorage.setItem(BEST_SCORE_KEY, String(this.bestScore));
     this.hud.update({
       score,
       bestScore: this.bestScore,
       speedLabel: `${(this.currentSpeed / BASE_SCROLL_SPEED).toFixed(2)}x`,
-      boostLabel: "Ended",
+      boostLabel: "",
     });
-    this.hud.showGameOver(score, this.bestScore);
+    this.hud.showGameOver(score, this.leaderboardEntries);
+    this.submitGlobalLeaderboard(score, this.currentUsername);
 
     this.tweens.add({
       targets: this.player,
@@ -655,6 +745,10 @@ export class FishSwimScene extends Phaser.Scene {
   }
 
   updateDebugToggle() {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
     if (!Phaser.Input.Keyboard.JustDown(this.keys.debug)) {
       return;
     }
@@ -697,5 +791,65 @@ export class FishSwimScene extends Phaser.Scene {
     }
 
     this.debugGraphics.strokeRect(body.x, body.y, body.width, body.height);
+  }
+
+  async syncGlobalLeaderboard() {
+    const entries = await fetchGlobalLeaderboard();
+    if (!entries?.length) {
+      return;
+    }
+
+    this.leaderboardEntries = entries;
+    if (this.hud.gameOverOverlay?.classList.contains("visible")) {
+      this.hud.renderLeaderboard(entries);
+    }
+  }
+
+  async submitGlobalLeaderboard(score, username) {
+    const entries = await submitGlobalLeaderboardScore({ score, name: username });
+    if (!entries?.length) {
+      return;
+    }
+
+    this.leaderboardEntries = entries;
+    if (this.hud.gameOverOverlay?.classList.contains("visible")) {
+      this.hud.renderLeaderboard(entries);
+    }
+  }
+
+  loadLocalLeaderboard() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(LEADERBOARD_KEY) || "[]");
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      return parsed
+        .map((value) => {
+          if (typeof value === "number") {
+            return { name: "Player", score: value };
+          }
+          return {
+            name: String(value?.name || "Player").slice(0, 16),
+            score: Number(value?.score) || 0,
+          };
+        })
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+    } catch {
+      return [];
+    }
+  }
+
+  saveLocalLeaderboardScore(score, username) {
+    const leaderboard = [...this.localLeaderboardEntries, {
+      name: (username || "Player").slice(0, 16),
+      score,
+    }]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+    this.localLeaderboardEntries = leaderboard;
+    window.localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboard));
+    return leaderboard;
   }
 }

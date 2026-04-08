@@ -13,6 +13,8 @@ export const BOOST_SPAWN_MIN = 6000;
 export const BOOST_SPAWN_MAX = 10500;
 export const BACKGROUND_THEME_SCORE_STEP = 25000;
 export const BEST_SCORE_KEY = "fish-swim-best-score";
+export const LEADERBOARD_KEY = "fish-swim-local-top10";
+export const USERNAME_KEY = "fish-swim-username";
 export const STAGE_SCORE_THRESHOLDS = {
   easy: 0,
   normal: 1000,
