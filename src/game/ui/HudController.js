@@ -11,6 +11,8 @@ export class HudController {
     this.startButton = document.getElementById("start-button");
     this.restartButton = document.getElementById("restart-button");
     this.rotateOverlay = document.getElementById("rotate-overlay");
+    this.displayedScore = 0;
+    this.displayedBestScore = 0;
   }
 
   bindStart(handler) {
@@ -22,6 +24,7 @@ export class HudController {
   }
 
   showStart() {
+    this.displayedScore = 0;
     this.startOverlay.classList.add("visible");
     this.gameOverOverlay.classList.remove("visible");
   }
@@ -31,6 +34,8 @@ export class HudController {
   }
 
   showGameOver(score, bestScore) {
+    this.displayedScore = score;
+    this.displayedBestScore = bestScore;
     this.finalScoreNode.textContent = String(score);
     this.finalBestScoreNode.textContent = String(bestScore);
     this.gameOverOverlay.classList.add("visible");
@@ -41,8 +46,18 @@ export class HudController {
   }
 
   update({ score, bestScore, speedLabel, boostLabel }) {
-    this.scoreNode.textContent = String(score);
-    this.bestScoreNode.textContent = String(bestScore);
+    this.displayedScore += Math.ceil((score - this.displayedScore) * 0.32);
+    this.displayedBestScore += Math.ceil((bestScore - this.displayedBestScore) * 0.25);
+
+    if (Math.abs(score - this.displayedScore) <= 2) {
+      this.displayedScore = score;
+    }
+    if (Math.abs(bestScore - this.displayedBestScore) <= 2) {
+      this.displayedBestScore = bestScore;
+    }
+
+    this.scoreNode.textContent = String(this.displayedScore);
+    this.bestScoreNode.textContent = String(this.displayedBestScore);
     this.speedNode.textContent = speedLabel;
     this.boostStatusNode.textContent = boostLabel;
   }

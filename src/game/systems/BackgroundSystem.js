@@ -1,4 +1,4 @@
-import { GAME_HEIGHT, GAME_WIDTH } from "../constants.js";
+import { BACKGROUND_THEME_SCORE_STEP, GAME_HEIGHT, GAME_WIDTH } from "../constants.js";
 
 const THEME_CONFIGS = [
   { id: 1, base: "bg1-base", layers: ["bg1-layer-1", "bg1-layer-2", "bg1-layer-3", "bg1-layer-4", "bg1-layer-5", "bg1-layer-6"] },
@@ -62,7 +62,7 @@ export class BackgroundSystem {
 
   update(delta, score) {
     const driftScale = delta / 1000;
-    const themeIndex = Math.floor(score / 200) % this.themes.length;
+    const themeIndex = Math.floor(score / BACKGROUND_THEME_SCORE_STEP) % this.themes.length;
     if (themeIndex !== this.activeThemeIndex) {
       this.transitionTo(themeIndex);
     }

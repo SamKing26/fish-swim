@@ -86,9 +86,9 @@ const FLOATING_TRAPS = [
 
 const STAGE_RULES = {
   easy: { min: TRAP_SPAWN_MIN + 180, max: TRAP_SPAWN_MAX + 180, floatingChance: 72, topOnlyChance: 10, bottomOnlyChance: 18, bothChance: 0, extraChance: 0, gapSize: 175 },
-  normal: { min: 900, max: 1320, floatingChance: 34, topOnlyChance: 18, bottomOnlyChance: 24, bothChance: 24, extraChance: 0, gapSize: 160 },
-  hard: { min: 760, max: 1080, floatingChance: 20, topOnlyChance: 18, bottomOnlyChance: 18, bothChance: 44, extraChance: 38, gapSize: 145 },
-  intense: { min: 620, max: 900, floatingChance: 14, topOnlyChance: 16, bottomOnlyChance: 16, bothChance: 54, extraChance: 54, gapSize: 126 },
+  normal: { min: 940, max: 1360, floatingChance: 34, topOnlyChance: 18, bottomOnlyChance: 24, bothChance: 24, extraChance: 0, gapSize: 164 },
+  hard: { min: 820, max: 1140, floatingChance: 22, topOnlyChance: 18, bottomOnlyChance: 18, bothChance: 42, extraChance: 28, gapSize: 154 },
+  intense: { min: 700, max: 980, floatingChance: 18, topOnlyChance: 16, bottomOnlyChance: 16, bothChance: 50, extraChance: 36, gapSize: 136 },
 };
 
 const LANES = {
@@ -113,12 +113,14 @@ export class TrapManager {
   }
 
   update(scroll, delta) {
+    const speedFactor = Phaser.Math.Clamp(scroll / 4.2, 0.7, 2.4);
     this.group.children.each((trap) => {
       if (!trap.active) {
         return;
       }
 
       trap.x -= scroll;
+      trap.visualTime = (trap.visualTime ?? 0) + delta * 0.0015 * speedFactor;
       if (trap.patternMotion) {
         trap.y += trap.patternMotion * (delta / 1000);
         if (trap.y < 90 || trap.y > GAME_HEIGHT - 90) {
@@ -127,48 +129,63 @@ export class TrapManager {
         }
       }
 
+      const sway = Math.sin(trap.visualTime + (trap.visualPhase ?? 0));
+      if (trap.anchorMode === "center") {
+        trap.setAngle((trap.baseAngle ?? 0) + sway * (1.8 + speedFactor * 1.8));
+      } else {
+        trap.setAngle((trap.baseAngle ?? 0) + sway * 0.9);
+      }
+
       if (trap.x < -260) {
         this.recycleTrap(trap);
       }
     });
   }
 
-  scheduleNext(now, stage) {
+  scheduleNext(now, stage, score = 0) {
     const rule = STAGE_RULES[stage] ?? STAGE_RULES.easy;
-    return now + Phaser.Math.Between(rule.min, rule.max);
+    const density = this.getStageDensity(stage, score);
+    const min = Math.round(Phaser.Math.Linear(rule.max, rule.min, density));
+    const max = Math.round(Phaser.Math.Linear(rule.max + 80, rule.max, density));
+    return now + Phaser.Math.Between(min, Math.max(min + 40, max));
   }
 
-  spawnPattern(stage, playerY) {
+  spawnPattern(stage, playerY, playerVelocityY = 0, score = 0) {
     const spawnX = GAME_WIDTH + 120;
     const rule = STAGE_RULES[stage] ?? STAGE_RULES.easy;
-    const lane = this.getLane(playerY);
+    const density = this.getStageDensity(stage, score);
+    const lane = this.getAnticipatedLane(playerY, playerVelocityY);
+    const pressureProfile = this.getPressureProfile(lane, playerVelocityY, stage);
+    const gapSize = Math.round(Phaser.Math.Linear(rule.gapSize + 18, rule.gapSize, density));
+    const extraChance = Math.round(rule.extraChance * density);
+    const floatingChance = Math.round(rule.floatingChance + (1 - density) * 6);
 
     const roll = Phaser.Math.Between(0, 99);
-    if (roll < rule.floatingChance) {
-      this.spawnLanePressure(spawnX, lane, stage);
+    if (roll < floatingChance) {
+      this.spawnLanePressure(spawnX, pressureProfile.pressureLane, stage, null, pressureProfile);
       return;
     }
 
-    if (roll < rule.floatingChance + rule.topOnlyChance) {
-      this.spawnTopLanePressure(spawnX, lane, stage);
+    if (roll < floatingChance + rule.topOnlyChance) {
+      this.spawnTopLanePressure(spawnX, pressureProfile.pressureLane, stage, pressureProfile);
       return;
     }
 
-    if (roll < rule.floatingChance + rule.topOnlyChance + rule.bottomOnlyChance) {
-      this.spawnBottomLanePressure(spawnX, lane, stage);
+    if (roll < floatingChance + rule.topOnlyChance + rule.bottomOnlyChance) {
+      this.spawnBottomLanePressure(spawnX, pressureProfile.pressureLane, stage, pressureProfile);
       return;
     }
 
-    if (roll < rule.floatingChance + rule.topOnlyChance + rule.bottomOnlyChance + rule.bothChance) {
-      const gapCenter = this.getGapCenterForLane(lane, stage);
-      this.spawnVerticalWall(spawnX, gapCenter, rule.gapSize);
-      if (Phaser.Math.Between(0, 100) < rule.extraChance) {
-        this.spawnLanePressure(spawnX + 210, lane, stage, gapCenter);
+    if (roll < floatingChance + rule.topOnlyChance + rule.bottomOnlyChance + rule.bothChance) {
+      const gapCenter = this.getGapCenterForLane(pressureProfile.safeLane, stage, pressureProfile);
+      this.spawnVerticalWall(spawnX, gapCenter, gapSize);
+      if (Phaser.Math.Between(0, 100) < extraChance) {
+        this.spawnLanePressure(spawnX + 210, pressureProfile.pressureLane, stage, gapCenter, pressureProfile);
       }
       return;
     }
 
-    this.spawnLanePressure(spawnX, lane, stage);
+    this.spawnLanePressure(spawnX, pressureProfile.pressureLane, stage, null, pressureProfile);
   }
 
   overlapsArea(x, y, paddingX = 180, paddingY = 140) {
@@ -180,6 +197,10 @@ export class TrapManager {
   recycleTrap(trap) {
     trap.disableBody(true, true);
     trap.patternMotion = 0;
+    trap.visualTime = 0;
+    trap.visualPhase = 0;
+    trap.baseAngle = 0;
+    trap.anchorMode = "center";
     trap.setAngle(0);
     trap.setScale(1);
     trap.setOrigin(0.5, 0.5);
@@ -205,7 +226,7 @@ export class TrapManager {
     this.spawnTrapByDefinition(definition, x, y);
   }
 
-  spawnLanePressure(x, lane, stage, gapCenter = null) {
+  spawnLanePressure(x, lane, stage, gapCenter = null, profile = null) {
     if (lane === "top") {
       if (stage === "easy" || stage === "normal") {
         this.spawnFloatingTrap(x, LANES.top);
@@ -226,11 +247,11 @@ export class TrapManager {
 
     const y = gapCenter
       ? (gapCenter < LANES.middle ? LANES.bottom : LANES.top)
-      : Phaser.Math.Between(0, 1) === 0 ? LANES.top : LANES.bottom;
+      : profile?.preferredFloatingY ?? (Phaser.Math.Between(0, 1) === 0 ? LANES.top : LANES.bottom);
     this.spawnFloatingTrap(x, y);
   }
 
-  spawnTopLanePressure(x, lane, stage) {
+  spawnTopLanePressure(x, lane, stage, profile = null) {
     if (lane === "top" && stage !== "easy") {
       this.spawnTopTrap(x, 0, this.getSingleSideSizeVariant(stage));
       return;
@@ -241,10 +262,10 @@ export class TrapManager {
       return;
     }
 
-    this.spawnFloatingTrap(x, Phaser.Math.Between(LANES.top - 20, LANES.middle - 30));
+    this.spawnFloatingTrap(x, profile?.topFloatingY ?? Phaser.Math.Between(LANES.top - 20, LANES.middle - 30));
   }
 
-  spawnBottomLanePressure(x, lane, stage) {
+  spawnBottomLanePressure(x, lane, stage, profile = null) {
     if (lane === "bottom" && stage !== "easy") {
       this.spawnBottomTrap(x, GAME_HEIGHT, this.getSingleSideSizeVariant(stage));
       return;
@@ -255,17 +276,17 @@ export class TrapManager {
       return;
     }
 
-    this.spawnFloatingTrap(x, Phaser.Math.Between(LANES.middle + 30, LANES.bottom + 10));
+    this.spawnFloatingTrap(x, profile?.bottomFloatingY ?? Phaser.Math.Between(LANES.middle + 30, LANES.bottom + 10));
   }
 
-  getGapCenterForLane(lane, stage) {
+  getGapCenterForLane(lane, stage, profile = null) {
     if (lane === "top") {
-      return stage === "intense" ? 315 : 330;
+      return profile?.topGapCenter ?? (stage === "intense" ? 315 : 330);
     }
     if (lane === "bottom") {
-      return stage === "intense" ? 225 : 210;
+      return profile?.bottomGapCenter ?? (stage === "intense" ? 225 : 210);
     }
-    return Phaser.Math.Between(210, 330);
+    return profile?.middleGapCenter ?? Phaser.Math.Between(210, 330);
   }
 
   getLane(y) {
@@ -278,6 +299,49 @@ export class TrapManager {
     return "middle";
   }
 
+  getAnticipatedLane(y, velocityY) {
+    const lookAheadY = Phaser.Math.Clamp(y + velocityY * 0.18, 0, GAME_HEIGHT);
+    return this.getLane(lookAheadY);
+  }
+
+  getPressureProfile(lane, velocityY, stage) {
+    const movingUp = velocityY < -40;
+    const movingDown = velocityY > 40;
+
+    if (lane === "top") {
+      return {
+        pressureLane: "top",
+        safeLane: "bottom",
+        preferredFloatingY: movingUp ? LANES.middle : LANES.top,
+        topFloatingY: movingUp ? LANES.middle - 20 : LANES.top + 10,
+        bottomFloatingY: LANES.bottom - 10,
+        topGapCenter: 340,
+        bottomGapCenter: stage === "intense" ? 215 : 205,
+      };
+    }
+
+    if (lane === "bottom") {
+      return {
+        pressureLane: "bottom",
+        safeLane: "top",
+        preferredFloatingY: movingDown ? LANES.middle : LANES.bottom,
+        topFloatingY: LANES.top + 10,
+        bottomFloatingY: movingDown ? LANES.middle + 20 : LANES.bottom - 10,
+        topGapCenter: stage === "intense" ? 325 : 335,
+        bottomGapCenter: 200,
+      };
+    }
+
+    return {
+      pressureLane: movingUp ? "top" : movingDown ? "bottom" : (Phaser.Math.Between(0, 1) === 0 ? "top" : "bottom"),
+      safeLane: "middle",
+      preferredFloatingY: movingUp ? LANES.top : movingDown ? LANES.bottom : Phaser.Math.Between(0, 1) === 0 ? LANES.top : LANES.bottom,
+      topFloatingY: LANES.top,
+      bottomFloatingY: LANES.bottom,
+      middleGapCenter: Phaser.Math.Clamp(270 - velocityY * 0.08, 220, 320),
+    };
+  }
+
   getSingleSideSizeVariant(stage) {
     if (stage === "easy") {
       return "standard";
@@ -286,6 +350,22 @@ export class TrapManager {
       return Phaser.Math.Between(0, 99) < 65 ? "large" : "standard";
     }
     return Phaser.Math.Between(0, 99) < 45 ? "large" : "standard";
+  }
+
+  getStageDensity(stage, score) {
+    if (stage === "easy") {
+      return Phaser.Math.Clamp(score / 1400, 0.12, 0.5);
+    }
+    if (stage === "normal") {
+      return Phaser.Math.Clamp((score - 1000) / 5000, 0.28, 0.72);
+    }
+    if (stage === "hard") {
+      return Phaser.Math.Clamp((score - 5000) / 6500, 0.42, 0.88);
+    }
+    if (score < 25000) {
+      return Phaser.Math.Clamp((score - 10000) / 15000, 0.56, 0.96);
+    }
+    return Phaser.Math.Clamp((score - 25000) / 20000, 0.74, 1);
   }
 
   spawnTrapByDefinition(definition, x, y, sizeVariant = "standard") {
@@ -303,6 +383,10 @@ export class TrapManager {
     trap.body.setImmovable(true);
     this.applyBodyShape(trap, definition.body, variant.bodyScale);
     trap.patternMotion = definition.motion ? Phaser.Math.Between(-definition.motion, definition.motion) : 0;
+    trap.visualPhase = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    trap.visualTime = 0;
+    trap.baseAngle = definition.anchor === "center" ? Phaser.Math.Between(-4, 4) : 0;
+    trap.anchorMode = definition.anchor;
 
     if (definition.anchor === "bottom") {
       trap.setOrigin(0.5, 1);

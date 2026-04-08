@@ -24,18 +24,22 @@ import { createTextures } from "../systems/TextureFactory.js";
 
 const PLAYER_SCALE = 0.25;
 const PLAYER_HITBOX = {
-  width: 140,
+  width: 154,
   height: 88,
   offsetX: 240,
   offsetY: 260,
 };
 
 const PLAYER_MOVEMENT = {
-  acceleration: 2360,
-  maxSpeed: 425,
-  deceleration: 3450,
+  acceleration: 2280,
+  turnAcceleration: 3260,
+  maxSpeed: 428,
+  deceleration: 3300,
   boostSpeedBonus: 50,
-  tiltLerp: 0.3,
+  intentRise: 13.5,
+  intentFall: 9.5,
+  idleDrift: 18,
+  tiltLerp: 0.27,
   maxTilt: 14,
 };
 
@@ -49,6 +53,9 @@ export class FishSwimScene extends Phaser.Scene {
     this.lastSwimSoundAt = 0;
     this.lastMilestone = 0;
     this.lastBoostPulseAt = 0;
+    this.lastWakeAt = 0;
+    this.lastSwimBubbleAt = 0;
+    this.playerIntentBlend = 0;
   }
 
   preload() {
@@ -117,6 +124,10 @@ export class FishSwimScene extends Phaser.Scene {
     this.player.setCollideWorldBounds(false);
     this.player.setDepth(10);
     this.player.play("fish-swim-loop");
+
+    this.playerAura = this.add.circle(this.player.x, this.player.y, 38, 0xffffff, 0);
+    this.playerAura.setDepth(9);
+    this.playerAura.setBlendMode(Phaser.BlendModes.ADD);
   }
 
   createInput() {
@@ -172,10 +183,18 @@ export class FishSwimScene extends Phaser.Scene {
   }
 
   createCollisions() {
-    this.physics.add.overlap(this.player, this.trapManager.group, () => {
-      if (this.isPlaying) {
-        this.triggerGameOver();
+    this.physics.add.overlap(this.player, this.trapManager.group, (_, trap) => {
+      if (!this.isPlaying || !trap.active) {
+        return;
       }
+
+      if (this.hasActiveImmunity()) {
+        this.trapManager.recycleTrap(trap);
+        this.spawnImmuneImpact(trap.x, trap.y);
+        return;
+      }
+
+      this.triggerGameOver();
     });
 
     this.physics.add.overlap(this.player, this.boostManager.group, (_, boost) => {
@@ -186,6 +205,7 @@ export class FishSwimScene extends Phaser.Scene {
       this.boostUntil = boostState.until;
       this.activeBoostType = boostState.type;
       this.audioManager.playBoostPickup();
+      this.audioManager.startBoostTimer(boostState.type);
     });
   }
 
@@ -199,8 +219,11 @@ export class FishSwimScene extends Phaser.Scene {
     this.nextBoostAt = 0;
     this.lastMilestone = 0;
     this.lastBoostPulseAt = 0;
+    this.lastWakeAt = 0;
+    this.lastSwimBubbleAt = 0;
     this.activeBoostType = null;
     this.touchDirection = 0;
+    this.playerIntentBlend = 0;
     this.player.setPosition(PLAYER_X, GAME_HEIGHT / 2);
     this.player.setVelocity(0, 0);
     this.player.setAcceleration(0, 0);
@@ -209,9 +232,15 @@ export class FishSwimScene extends Phaser.Scene {
     this.player.clearTint();
     this.player.setScale(PLAYER_SCALE);
     this.player.play("fish-swim-loop", true);
+    this.playerAura.setPosition(this.player.x, this.player.y);
+    this.playerAura.setAlpha(0);
+    this.playerAura.setScale(1);
+    this.playerAura.setFillStyle(0xffffff, 0);
     this.tweens.killTweensOf(this.player);
+    this.tweens.killTweensOf(this.playerAura);
     this.trapManager.reset();
     this.boostManager.reset();
+    this.audioManager.stopBoostTimer();
     this.audioManager.startMusicLoop();
   }
 
@@ -256,14 +285,18 @@ export class FishSwimScene extends Phaser.Scene {
     this.boostManager.update(this.currentSpeed * (delta / 1000), delta, this.time.now);
     this.updateBoostState();
 
-    this.score += (delta / 16.6667) * SCORE_RATE * (this.currentSpeed / BASE_SCROLL_SPEED);
+    this.score += (delta / 16.6667)
+      * SCORE_RATE
+      * this.getScoreRateMultiplier(this.score)
+      * this.getScoreBoostMultiplier()
+      * (this.currentSpeed / BASE_SCROLL_SPEED);
     this.handleMilestones();
     this.updateFishAnimationSpeed();
     this.updateHud();
 
     if (this.time.now >= this.nextTrapAt) {
-      this.trapManager.spawnPattern(stage, this.player.y);
-      this.nextTrapAt = this.trapManager.scheduleNext(this.time.now, stage);
+      this.trapManager.spawnPattern(stage, this.player.y, this.player.body.velocity.y, this.score);
+      this.nextTrapAt = this.trapManager.scheduleNext(this.time.now, stage, this.score);
     }
 
     if (this.time.now >= this.nextBoostAt) {
@@ -276,7 +309,7 @@ export class FishSwimScene extends Phaser.Scene {
 
   updateDifficulty(stage = this.getDifficultyStage()) {
     const speedFromScore = this.getSpeedForScore(stage, this.score);
-    const boostMultiplier = this.boostUntil > this.time.now
+    const boostMultiplier = this.hasActiveBoost()
       ? getBoostConfig(this.activeBoostType).speedMultiplier ?? BOOST_MULTIPLIER
       : 1;
     this.currentSpeed = speedFromScore * boostMultiplier;
@@ -284,38 +317,62 @@ export class FishSwimScene extends Phaser.Scene {
 
   getSpeedForScore(stage, score) {
     if (stage === "easy") {
-      return BASE_SCROLL_SPEED + Math.min(70, score * 0.065);
+      return BASE_SCROLL_SPEED + Math.min(140.8, score * 0.1152);
     }
     if (stage === "normal") {
-      return 305 + Math.min(82, (score - STAGE_SCORE_THRESHOLDS.normal) * 0.02);
+      return 367.8 + Math.min(172.8, (score - STAGE_SCORE_THRESHOLDS.normal) * 0.0384);
     }
     if (stage === "hard") {
-      return 382 + Math.min(96, (score - STAGE_SCORE_THRESHOLDS.hard) * 0.018);
+      return 508.8 + Math.min(211.2, (score - STAGE_SCORE_THRESHOLDS.hard) * 0.0336);
     }
     if (score < 25000) {
-      return 468 + Math.min(118, (score - STAGE_SCORE_THRESHOLDS.intense) * 0.0085);
+      return 715.6 + Math.min(275.2, (score - STAGE_SCORE_THRESHOLDS.intense) * 0.0176);
     }
-    return 586 + Math.min(134, (score - 25000) * 0.0055);
+    return 912 + Math.min(352, (score - 25000) * 0.012);
+  }
+
+  getScoreRateMultiplier(score) {
+    if (score < STAGE_SCORE_THRESHOLDS.normal) {
+      return 1.5;
+    }
+    if (score < STAGE_SCORE_THRESHOLDS.hard) {
+      return 1.83 + Math.min(0.36, (score - STAGE_SCORE_THRESHOLDS.normal) / 3333.33);
+    }
+    if (score < STAGE_SCORE_THRESHOLDS.intense) {
+      return 2.25 + Math.min(0.525, (score - STAGE_SCORE_THRESHOLDS.hard) / 4666.67);
+    }
+    if (score < 25000) {
+      return 2.775 + Math.min(0.825, (score - STAGE_SCORE_THRESHOLDS.intense) / 6666.67);
+    }
+    return 3.675 + Math.min(1.05, (score - 25000) / 10000);
   }
 
   updatePlayer(delta) {
-    const direction = this.getVerticalIntent();
+    const inputDirection = this.getVerticalIntent();
     const dt = delta / 1000;
-    const speedBonus = Math.min(118, this.currentSpeed * 0.098);
-    const maxSpeed = PLAYER_MOVEMENT.maxSpeed + speedBonus + (this.boostUntil > this.time.now ? PLAYER_MOVEMENT.boostSpeedBonus : 0);
-    const responsiveness = Phaser.Math.Clamp(0.2 + (this.currentSpeed / 1800), 0.2, 0.34);
-    const acceleration = PLAYER_MOVEMENT.acceleration + speedBonus * 1.85;
-    const deceleration = PLAYER_MOVEMENT.deceleration + speedBonus * 1.6;
+    const speedBonus = Math.min(138, this.currentSpeed * 0.102);
+    const maxSpeed = PLAYER_MOVEMENT.maxSpeed + speedBonus + (this.hasSpeedBoost() ? PLAYER_MOVEMENT.boostSpeedBonus : 0);
+    const acceleration = PLAYER_MOVEMENT.acceleration + speedBonus * 1.45;
+    const turnAcceleration = PLAYER_MOVEMENT.turnAcceleration + speedBonus * 1.8;
+    const deceleration = PLAYER_MOVEMENT.deceleration + speedBonus * 1.4;
     const velocityY = this.player.body.velocity.y;
-    const targetVelocity = direction * maxSpeed;
+    const blendRate = inputDirection === 0
+      ? PLAYER_MOVEMENT.intentFall
+      : PLAYER_MOVEMENT.intentRise;
+    this.playerIntentBlend = Phaser.Math.Linear(
+      this.playerIntentBlend,
+      inputDirection,
+      Phaser.Math.Clamp(blendRate * dt, 0, 1),
+    );
 
-    if (direction !== 0) {
-      const acceleratedVelocity = Phaser.Math.Clamp(
-        velocityY + direction * acceleration * dt,
-        -maxSpeed,
-        maxSpeed,
-      );
-      this.player.body.velocity.y = Phaser.Math.Linear(acceleratedVelocity, targetVelocity, responsiveness);
+    const targetVelocity = this.playerIntentBlend * maxSpeed;
+    const reversing = velocityY !== 0 && Math.sign(targetVelocity) !== 0 && Math.sign(velocityY) !== Math.sign(targetVelocity);
+    const appliedAcceleration = reversing ? turnAcceleration : acceleration;
+
+    if (Math.abs(targetVelocity) > 1) {
+      const velocityStep = appliedAcceleration * dt;
+      const deltaToTarget = Phaser.Math.Clamp(targetVelocity - velocityY, -velocityStep, velocityStep);
+      this.player.body.velocity.y = Phaser.Math.Clamp(velocityY + deltaToTarget, -maxSpeed, maxSpeed);
     } else if (velocityY !== 0) {
       const decelStep = deceleration * dt;
       if (Math.abs(velocityY) <= decelStep) {
@@ -323,6 +380,10 @@ export class FishSwimScene extends Phaser.Scene {
       } else {
         this.player.body.velocity.y -= Math.sign(velocityY) * decelStep;
       }
+    }
+
+    if (Math.abs(targetVelocity) <= 1 && Math.abs(this.player.body.velocity.y) < 120) {
+      this.player.body.velocity.y += Math.sin(this.time.now * 0.0024) * PLAYER_MOVEMENT.idleDrift * dt;
     }
 
     const nextY = Phaser.Math.Clamp(this.player.y + this.player.body.velocity.y * dt, PLAYER_MIN_Y, PLAYER_MAX_Y);
@@ -333,19 +394,29 @@ export class FishSwimScene extends Phaser.Scene {
     }
 
     const swimWave = Math.sin(this.time.now * 0.012);
+    const speedRatio = Phaser.Math.Clamp(this.currentSpeed / BASE_SCROLL_SPEED, 1, 4.6);
     this.player.x = PLAYER_X + swimWave * 3;
     this.player.angle = Phaser.Math.Linear(
       this.player.angle,
-      Phaser.Math.Clamp((this.player.body.velocity.y / maxSpeed) * PLAYER_MOVEMENT.maxTilt + swimWave * 1.2, -PLAYER_MOVEMENT.maxTilt, PLAYER_MOVEMENT.maxTilt),
+      Phaser.Math.Clamp(
+        (this.player.body.velocity.y / maxSpeed) * PLAYER_MOVEMENT.maxTilt
+        + swimWave * (1.2 + speedRatio * 0.55),
+        -PLAYER_MOVEMENT.maxTilt,
+        PLAYER_MOVEMENT.maxTilt,
+      ),
       PLAYER_MOVEMENT.tiltLerp,
     );
     const velocityStretch = Phaser.Math.Clamp(Math.abs(this.player.body.velocity.y) / maxSpeed, 0, 1);
     this.player.setScale(
-      PLAYER_SCALE + velocityStretch * 0.004,
-      PLAYER_SCALE - velocityStretch * 0.005,
+      PLAYER_SCALE + velocityStretch * (0.004 + speedRatio * 0.0008),
+      PLAYER_SCALE - velocityStretch * (0.005 + speedRatio * 0.001),
     );
 
-    if (direction !== 0 && this.time.now - this.lastSwimSoundAt > 220) {
+    this.playerAura.setPosition(this.player.x, this.player.y);
+    this.spawnWakeBubble(speedRatio);
+    this.spawnSwimBubble(speedRatio, velocityStretch);
+
+    if (Math.abs(this.playerIntentBlend) > 0.35 && this.time.now - this.lastSwimSoundAt > 220) {
       this.audioManager.playSwim();
       this.lastSwimSoundAt = this.time.now;
     }
@@ -364,11 +435,38 @@ export class FishSwimScene extends Phaser.Scene {
     return this.touchDirection;
   }
 
+  hasActiveBoost() {
+    return this.boostUntil > this.time.now && Boolean(this.activeBoostType);
+  }
+
+  hasSpeedBoost() {
+    if (!this.hasActiveBoost()) {
+      return false;
+    }
+    return Boolean(getBoostConfig(this.activeBoostType).speedMultiplier);
+  }
+
+  hasActiveImmunity() {
+    if (!this.hasActiveBoost()) {
+      return false;
+    }
+    return Boolean(getBoostConfig(this.activeBoostType).immune);
+  }
+
+  getScoreBoostMultiplier() {
+    if (!this.hasActiveBoost()) {
+      return 1;
+    }
+    return getBoostConfig(this.activeBoostType).scoreMultiplier ?? 1;
+  }
+
   updateBoostState() {
-    const active = this.boostUntil > this.time.now;
+    const active = this.hasActiveBoost();
 
     if (active) {
-      this.player.setTint(0xb6ffff);
+      const boostConfig = getBoostConfig(this.activeBoostType);
+      this.player.setTint(boostConfig.immune ? 0xfff2a8 : 0xb6ffff);
+      this.updatePlayerAura(boostConfig);
       if (!this.lastBoostPulseAt || this.time.now - this.lastBoostPulseAt > 420) {
         this.boostManager.spawnTrail(this.player, this.activeBoostType);
         this.audioManager.playBoostActive();
@@ -379,21 +477,26 @@ export class FishSwimScene extends Phaser.Scene {
 
     this.activeBoostType = null;
     this.player.clearTint();
+    this.playerAura.setAlpha(0);
+    this.audioManager.stopBoostTimer();
   }
 
   updateFishAnimationSpeed() {
     const stage = this.getDifficultyStage();
     let targetFps = 8;
     if (stage === "normal") {
-      targetFps = 10.5;
+      targetFps = 11;
     } else if (stage === "hard") {
-      targetFps = 12.5;
+      targetFps = 13.5;
     } else if (stage === "intense") {
-      targetFps = this.score >= 25000 ? 16 : 14.5;
+      targetFps = this.score >= 25000 ? 19 : 16.5;
     }
 
-    if (this.boostUntil > this.time.now) {
-      targetFps += 2;
+    const speedRatio = Phaser.Math.Clamp(this.currentSpeed / BASE_SCROLL_SPEED, 1, 4.6);
+    targetFps += (speedRatio - 1) * 2.8;
+
+    if (this.hasActiveBoost()) {
+      targetFps += 2.5;
     }
 
     this.player.anims.timeScale = targetFps / 14;
@@ -407,14 +510,105 @@ export class FishSwimScene extends Phaser.Scene {
     }
   }
 
+  spawnImmuneImpact(x, y) {
+    const ring = this.add.circle(x, y, 24, 0xfff2a8, 0.32);
+    ring.setDepth(12);
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scale: 1.9,
+      duration: 220,
+      ease: "Sine.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  updatePlayerAura(boostConfig) {
+    const pulse = 1 + Math.sin(this.time.now * 0.014) * 0.12;
+    this.playerAura.setFillStyle(boostConfig.glowColor ?? 0xffffff, boostConfig.immune ? 0.18 : 0.14);
+    this.playerAura.setScale(pulse);
+    this.playerAura.setAlpha(boostConfig.immune ? 0.9 : 0.75);
+  }
+
+  spawnWakeBubble(speedRatio) {
+    const interval = Phaser.Math.Linear(165, 52, Phaser.Math.Clamp((speedRatio - 1) / 3.6, 0, 1));
+    if (this.time.now - this.lastWakeAt < interval) {
+      return;
+    }
+
+    this.lastWakeAt = this.time.now;
+    const bubble = this.add.image(
+      this.player.x - Phaser.Math.Between(18, 34),
+      this.player.y + Phaser.Math.Between(-14, 14),
+      "bubble-particle",
+    );
+    bubble.setDepth(5);
+    bubble.setAlpha(0.24);
+    bubble.setScale(Phaser.Math.FloatBetween(0.45, 0.82));
+
+    this.tweens.add({
+      targets: bubble,
+      x: bubble.x - Phaser.Math.Between(24, 42),
+      y: bubble.y + Phaser.Math.Between(-18, 18),
+      alpha: 0,
+      scale: bubble.scaleX + 0.4 + speedRatio * 0.06,
+      duration: Phaser.Math.Linear(360, 180, Phaser.Math.Clamp((speedRatio - 1) / 3.6, 0, 1)),
+      ease: "Sine.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+  }
+
+  spawnSwimBubble(speedRatio, velocityStretch) {
+    const interval = Phaser.Math.Linear(150, 58, Phaser.Math.Clamp((speedRatio - 1) / 3.6, 0, 1));
+    if (this.time.now - this.lastSwimBubbleAt < interval) {
+      return;
+    }
+
+    this.lastSwimBubbleAt = this.time.now;
+    const bubble = this.add.image(
+      this.player.x - Phaser.Math.Between(2, 10),
+      this.player.y + Phaser.Math.Between(-8, 10),
+      "bubble-particle",
+    );
+    bubble.setDepth(6);
+    bubble.setAlpha(0.16 + velocityStretch * 0.08);
+    bubble.setScale(Phaser.Math.FloatBetween(0.18, 0.38));
+
+    this.tweens.add({
+      targets: bubble,
+      x: bubble.x - Phaser.Math.Between(8, 18),
+      y: bubble.y - Phaser.Math.Between(16, 34),
+      alpha: 0,
+      scale: bubble.scaleX + 0.24 + speedRatio * 0.04,
+      duration: Phaser.Math.Linear(540, 260, Phaser.Math.Clamp((speedRatio - 1) / 3.6, 0, 1)),
+      ease: "Sine.easeOut",
+      onComplete: () => bubble.destroy(),
+    });
+  }
+
+  getBoostStatusLabel() {
+    const boostLeft = Math.max(0, this.boostUntil - this.time.now);
+    if (boostLeft <= 0 || !this.activeBoostType) {
+      return "Ready";
+    }
+
+    const labelMap = {
+      acceleration: "Speed",
+      crown: "Crown",
+      shield: "Shield",
+      pearl: "Double",
+    };
+
+    return `${labelMap[this.activeBoostType] ?? "Boost"} ${(boostLeft / 1000).toFixed(1)}s`;
+  }
+
   updateHud() {
     const score = Math.floor(this.score);
-    const boostLeft = Math.max(0, this.boostUntil - this.time.now);
     this.hud.update({
       score,
       bestScore: Math.max(this.bestScore, score),
       speedLabel: `${(this.currentSpeed / BASE_SCROLL_SPEED).toFixed(2)}x`,
-      boostLabel: boostLeft > 0 ? `${(boostLeft / 1000).toFixed(1)}s` : "Ready",
+      boostLabel: this.getBoostStatusLabel(),
     });
   }
 
@@ -422,7 +616,10 @@ export class FishSwimScene extends Phaser.Scene {
     this.isPlaying = false;
     this.isGameOver = true;
     this.player.setTint(0xff9aa2);
+    this.audioManager.stopBoostTimer();
+    this.audioManager.stopMusicLoop();
     this.audioManager.playCollision();
+    this.audioManager.playGameOver();
 
     const score = Math.floor(this.score);
     this.bestScore = Math.max(this.bestScore, score);

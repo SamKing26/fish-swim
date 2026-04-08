@@ -11,6 +11,7 @@ export const TRAP_SPAWN_MIN = 850;
 export const TRAP_SPAWN_MAX = 1550;
 export const BOOST_SPAWN_MIN = 6000;
 export const BOOST_SPAWN_MAX = 10500;
+export const BACKGROUND_THEME_SCORE_STEP = 25000;
 export const BEST_SCORE_KEY = "fish-swim-best-score";
 export const STAGE_SCORE_THRESHOLDS = {
   easy: 0,

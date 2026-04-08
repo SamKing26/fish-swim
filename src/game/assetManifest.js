@@ -91,7 +91,7 @@ export const TRAP_ASSETS = {
     sourceSize: { width: 264, height: 212 },
   },
   "trap-mini-bomb": {
-    path: `${ASSET_BASE}/boost-assets/Small-bomb.png`,
+    path: `${ASSET_BASE}/trap-assets/Small-bomb.png`,
     sourceSize: { width: 138, height: 153 },
   },
 };

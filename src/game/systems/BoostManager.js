@@ -1,9 +1,10 @@
 import Phaser from "phaser";
-import { BOOST_DURATION_MS, BOOST_SPAWN_MAX, BOOST_SPAWN_MIN, GAME_HEIGHT, GAME_WIDTH } from "../constants.js";
+import { BOOST_SPAWN_MAX, BOOST_SPAWN_MIN, GAME_HEIGHT, GAME_WIDTH } from "../constants.js";
 
 const BOOST_TYPES = {
   acceleration: {
     texture: "boost-acceleration",
+    spawnWeight: 0.5,
     body: { type: "rect", width: 52, height: 88, offsetX: 26, offsetY: 36 },
     glowColor: 0xffd76a,
     bobSpeed: 0.006,
@@ -13,9 +14,11 @@ const BOOST_TYPES = {
     scaleOffset: 0.12,
     scale: 0.5,
     speedMultiplier: 1.54,
+    durationMs: 4000,
   },
   pearl: {
     texture: "boost-pearl-real",
+    spawnWeight: 0.2,
     body: { type: "circle", radius: 40, offsetX: 30, offsetY: 18 },
     glowColor: 0xfbeab8,
     bobSpeed: 0.0048,
@@ -24,10 +27,12 @@ const BOOST_TYPES = {
     rotationSpeed: 0.012,
     scaleOffset: 0.08,
     scale: 0.46,
-    speedMultiplier: 1.36,
+    durationMs: 7000,
+    scoreMultiplier: 2,
   },
   shield: {
     texture: "boost-shield",
+    spawnWeight: 0.2,
     body: { type: "rect", width: 54, height: 76, offsetX: 22, offsetY: 24 },
     glowColor: 0x71f0ff,
     bobSpeed: 0.0054,
@@ -36,10 +41,12 @@ const BOOST_TYPES = {
     rotationSpeed: -0.018,
     scaleOffset: 0.1,
     scale: 0.52,
-    speedMultiplier: 1.28,
+    durationMs: 4000,
+    immune: true,
   },
   crown: {
     texture: "boost-crown",
+    spawnWeight: 0.2,
     body: { type: "rect", width: 78, height: 52, offsetX: 24, offsetY: 42 },
     glowColor: 0xfff08b,
     bobSpeed: 0.005,
@@ -49,6 +56,8 @@ const BOOST_TYPES = {
     scaleOffset: 0.09,
     scale: 0.5,
     speedMultiplier: 1.42,
+    durationMs: 7000,
+    immune: true,
   },
 };
 
@@ -102,15 +111,15 @@ export class BoostManager {
   }
 
   scheduleNext(now, stage) {
-    let min = BOOST_SPAWN_MIN;
-    let max = BOOST_SPAWN_MAX;
+    let min = (BOOST_SPAWN_MIN + 3200) * 2;
+    let max = (BOOST_SPAWN_MAX + 4200) * 2;
 
     if (stage === "hard") {
-      min = 5600;
-      max = 9200;
+      min = 18000;
+      max = 27600;
     } else if (stage === "intense") {
-      min = 5200;
-      max = 8600;
+      min = 19600;
+      max = 29600;
     }
 
     return now + Phaser.Math.Between(min, max);
@@ -122,14 +131,19 @@ export class BoostManager {
     }
 
     const spawnX = GAME_WIDTH + 120;
-    const attemptCount = stage === "intense" ? 8 : stage === "hard" ? 7 : 5;
-    const clearanceX = stage === "intense" ? 280 : stage === "hard" ? 255 : 240;
-    const clearanceY = stage === "intense" ? 190 : stage === "hard" ? 175 : 170;
+    const attemptCount = stage === "intense" ? 12 : stage === "hard" ? 10 : 7;
+    const clearanceX = stage === "intense" ? 250 : stage === "hard" ? 230 : 210;
+    const clearanceY = stage === "intense" ? 170 : stage === "hard" ? 155 : 145;
+    const candidateBands = this.getSpawnBands(playerY, stage);
     let targetY = null;
+    let targetX = spawnX;
     for (let attempt = 0; attempt < attemptCount; attempt += 1) {
-      const candidateY = Phaser.Math.Clamp(playerY + Phaser.Math.Between(-135, 135), 110, GAME_HEIGHT - 110);
-      if (!trapManager.overlapsArea(spawnX, candidateY, clearanceX, clearanceY)) {
+      const band = Phaser.Utils.Array.GetRandom(candidateBands);
+      const candidateY = Phaser.Math.Between(band.minY, band.maxY);
+      const candidateX = spawnX + Phaser.Math.Between(-54, 48);
+      if (!trapManager.overlapsArea(candidateX, candidateY, clearanceX, clearanceY)) {
         targetY = candidateY;
+        targetX = candidateX;
         break;
       }
     }
@@ -138,14 +152,14 @@ export class BoostManager {
       return false;
     }
 
-    const boostType = Phaser.Utils.Array.GetRandom(Object.keys(BOOST_TYPES));
+    const boostType = this.pickBoostType();
     const config = BOOST_TYPES[boostType];
-    const boost = this.group.get(spawnX, targetY, config.texture);
+    const boost = this.group.get(targetX, targetY, config.texture);
     if (!boost) {
       return false;
     }
 
-    boost.enableBody(true, spawnX, targetY, true, true);
+    boost.enableBody(true, targetX, targetY, true, true);
     boost.setTexture(config.texture);
     boost.body.setAllowGravity(false);
     boost.body.setImmovable(true);
@@ -161,7 +175,8 @@ export class BoostManager {
   }
 
   collect(boost, player) {
-    const config = BOOST_TYPES[boost.boostType];
+    const boostType = boost.boostType;
+    const config = BOOST_TYPES[boostType];
     this.recycleBoost(boost);
     const flash = this.scene.add.circle(player.x, player.y, 24, config.glowColor, 0.45);
     flash.setDepth(11);
@@ -169,7 +184,7 @@ export class BoostManager {
     flash.growSpeed = 0.02;
     flash.fadeSpeed = 0.018;
     this.effects.add(flash);
-    return { until: this.scene.time.now + BOOST_DURATION_MS, type: boost.boostType };
+    return { until: this.scene.time.now + config.durationMs, type: boostType };
   }
 
   spawnTrail(player, boostType) {
@@ -200,6 +215,42 @@ export class BoostManager {
 
     boost.body.setSize(body.width, body.height);
     boost.body.setOffset(body.offsetX, body.offsetY);
+  }
+
+  getSpawnBands(playerY, stage) {
+    const clampedPlayerY = Phaser.Math.Clamp(playerY, 118, GAME_HEIGHT - 118);
+    const nearReach = stage === "intense" ? 105 : stage === "hard" ? 118 : 130;
+    const mediumReach = stage === "intense" ? 150 : stage === "hard" ? 165 : 180;
+
+    return [
+      {
+        minY: Phaser.Math.Clamp(clampedPlayerY - nearReach, 118, GAME_HEIGHT - 118),
+        maxY: Phaser.Math.Clamp(clampedPlayerY + nearReach, 118, GAME_HEIGHT - 118),
+      },
+      {
+        minY: Phaser.Math.Clamp(clampedPlayerY - mediumReach, 118, GAME_HEIGHT - 118),
+        maxY: Phaser.Math.Clamp(clampedPlayerY - 36, 118, GAME_HEIGHT - 118),
+      },
+      {
+        minY: Phaser.Math.Clamp(clampedPlayerY + 36, 118, GAME_HEIGHT - 118),
+        maxY: Phaser.Math.Clamp(clampedPlayerY + mediumReach, 118, GAME_HEIGHT - 118),
+      },
+    ].filter((band) => band.maxY > band.minY);
+  }
+
+  pickBoostType() {
+    const entries = Object.entries(BOOST_TYPES);
+    const totalWeight = entries.reduce((sum, [, config]) => sum + (config.spawnWeight ?? 1), 0);
+    let roll = Math.random() * totalWeight;
+
+    for (const [boostType, config] of entries) {
+      roll -= config.spawnWeight ?? 1;
+      if (roll <= 0) {
+        return boostType;
+      }
+    }
+
+    return entries[0][0];
   }
 }
 
