@@ -1,0 +1,20 @@
+{
+  "name": "fish-swim",
+  "version": "1.0.0",
+  "description": "Endless underwater Phaser runner based on the provided PRD.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "generate:fish": "node scripts/generate_fish_layers.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "phaser": "^3.90.0",
+    "sharp": "^0.34.5",
+    "vite": "^8.0.7"
+  }
+}

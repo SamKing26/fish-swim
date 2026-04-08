@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>FISH SWIM</title>
+</head>
+<body>
+  <div id="app">
+    <div id="game-shell">
+      <div id="game"></div>
+      <div id="hud" class="panel">
+        <div class="hud-row">
+          <div class="stat">
+            <span class="label">Score</span>
+            <span id="score">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">Best</span>
+            <span id="best-score">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">Speed</span>
+            <span id="speed">1.0x</span>
+          </div>
+          <div class="stat">
+            <span class="label">Boost</span>
+            <span id="boost-status">Ready</span>
+          </div>
+        </div>
+        <div class="hint">W / Up = rise, S / Down = dive, tap upper/lower half on mobile</div>
+      </div>
+      <div id="start-overlay" class="overlay visible">
+        <div class="panel overlay-card">
+          <h1>FISH SWIM</h1>
+          <p>Swim through the reef, dodge traps, grab glowing speed bubbles, and survive as the ocean gets faster.</p>
+          <button id="start-button" type="button">Start Swim</button>
+        </div>
+      </div>
+      <div id="game-over-overlay" class="overlay">
+        <div class="panel overlay-card">
+          <h2>Run Over</h2>
+          <p>Final Score: <strong id="final-score">0</strong></p>
+          <p>Best Score: <strong id="final-best-score">0</strong></p>
+          <button id="restart-button" type="button">Swim Again</button>
+        </div>
+      </div>
+      <div id="rotate-overlay" class="overlay rotate-overlay">
+        <div class="panel overlay-card">
+          <h2>Rotate Device</h2>
+          <p>FISH SWIM is designed for landscape mode on mobile. Rotate your phone to continue.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
