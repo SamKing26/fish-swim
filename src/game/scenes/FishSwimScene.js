@@ -177,7 +177,18 @@ export class FishSwimScene extends Phaser.Scene {
   }
 
   bindUi() {
+    if (this.hud.usernameInput) {
+      this.hud.usernameInput.addEventListener("focus", () => {
+        this.input.keyboard.enabled = false;
+      });
+
+      this.hud.usernameInput.addEventListener("blur", () => {
+        this.input.keyboard.enabled = true;
+      });
+    }
+
     this.hud.bindStart(async (username) => {
+      this.input.keyboard.enabled = true;
       this.audioManager.resume();
       await this.hud.enterImmersiveMode();
       this.audioManager.playButton();
