@@ -2,8 +2,22 @@ const LEADERBOARD_KEY = "fish-swim:leaderboard";
 const MAX_ENTRIES = 10;
 const MAX_STORED_ENTRIES = 200;
 
+function getRedisConfig() {
+  return {
+    url: process.env.UPSTASH_REDIS_REST_URL
+      || process.env.UPSTASH_REDIS_REST_KV_REST_API_URL
+      || process.env.KV_REST_API_URL
+      || "",
+    token: process.env.UPSTASH_REDIS_REST_TOKEN
+      || process.env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN
+      || process.env.KV_REST_API_TOKEN
+      || "",
+  };
+}
+
 function isConfigured() {
-  return Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  const config = getRedisConfig();
+  return Boolean(config.url && config.token);
 }
 
 function sanitizeName(value) {
@@ -18,8 +32,7 @@ function sanitizeScore(value) {
 }
 
 async function upstashCommand(...segments) {
-  const baseUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const { url: baseUrl, token } = getRedisConfig();
   const url = `${baseUrl}/${segments.map((segment) => encodeURIComponent(String(segment))).join("/")}`;
   const response = await fetch(url, {
     method: "POST",
