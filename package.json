@@ -7,6 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "generate:fish": "node scripts/generate_fish_layers.mjs",
+    "generate:fish-world-assets": "node scripts/generate_fish_world_placeholders.mjs",
     "split:boost-timer": "node scripts/split_boost_timer.mjs",
     "generate:audio": "node scripts/generate_audio_assets.mjs"
   },
@@ -19,6 +20,7 @@
     "audiobuffer-to-wav": "^1.0.0",
     "phaser": "^3.90.0",
     "sharp": "^0.34.5",
+    "three": "^0.183.2",
     "vite": "^8.0.7"
   }
 }

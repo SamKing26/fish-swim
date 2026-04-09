@@ -39,6 +39,24 @@ body {
   height: 100%;
 }
 
+.fish-world-root {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.fish-world-root.hidden,
+.fish-world-ui.hidden {
+  display: none;
+}
+
+body.mode-fish-world #hud,
+body.mode-fish-world #pause-overlay,
+body.mode-fish-world #game-over-overlay,
+body.mode-fish-world .menu-button {
+  display: none !important;
+}
+
 canvas {
   display: block;
   width: 100%;
@@ -466,14 +484,8 @@ canvas {
 }
 
 .landing-mode-card-soon {
-  opacity: 0.84;
+  opacity: 0.96;
   transform: translateX(-10px);
-}
-
-.landing-mode-card-soon button[disabled] {
-  cursor: not-allowed;
-  filter: grayscale(0.2);
-  opacity: 0.78;
 }
 
 #start-overlay .landing-deco {
@@ -674,6 +686,200 @@ canvas {
   color: #9bccd8;
 }
 
+.fish-world-ui {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.fish-world-status,
+.fish-world-hint,
+.fish-world-radar {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.fish-world-status {
+  top: max(18px, env(safe-area-inset-top));
+  left: max(18px, env(safe-area-inset-left));
+  width: min(320px, 34vw);
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(5, 30, 44, 0.82), rgba(4, 20, 31, 0.74)),
+    radial-gradient(circle at top, rgba(111, 236, 255, 0.14), transparent 64%);
+}
+
+.fish-world-status-kicker,
+.fish-world-radar-title,
+.fish-world-hint-title {
+  margin-bottom: 8px;
+  color: #93eaff;
+  font-size: 0.74rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.fish-world-phase {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #f4feff;
+  text-shadow: 0 0 12px rgba(89, 225, 255, 0.18);
+}
+
+.fish-world-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin-top: 16px;
+}
+
+.fish-world-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: rgba(120, 225, 249, 0.08);
+}
+
+.fish-world-stats span {
+  font-size: 0.72rem;
+  color: #89dced;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.fish-world-stats strong {
+  color: #f2feff;
+  font-size: 0.95rem;
+}
+
+.fish-world-hint {
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(480px, 52vw);
+  padding: 16px 18px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(5, 30, 44, 0.82), rgba(4, 20, 31, 0.74)),
+    radial-gradient(circle at top, rgba(111, 236, 255, 0.12), transparent 64%);
+}
+
+.fish-world-hint p {
+  margin: 0 0 12px;
+  color: #d8f8ff;
+  line-height: 1.5;
+}
+
+.fish-world-radar {
+  top: max(18px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+  width: 210px;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(5, 30, 44, 0.82), rgba(4, 20, 31, 0.74)),
+    radial-gradient(circle at top, rgba(111, 236, 255, 0.12), transparent 64%);
+}
+
+.fish-world-radar-scope {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 235, 255, 0.22);
+  background:
+    radial-gradient(circle at center, rgba(32, 88, 116, 0.4), rgba(4, 22, 33, 0.86)),
+    linear-gradient(180deg, rgba(92, 214, 255, 0.06), transparent);
+  overflow: hidden;
+}
+
+.fish-world-radar-scope::before,
+.fish-world-radar-scope::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(137, 230, 251, 0.12);
+  transform: translate(-50%, -50%);
+}
+
+.fish-world-radar-scope::before {
+  width: 1px;
+  height: 100%;
+}
+
+.fish-world-radar-scope::after {
+  width: 100%;
+  height: 1px;
+}
+
+.radar-sweep {
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(from 0deg, rgba(113, 240, 255, 0.28), transparent 18%, transparent 100%);
+  animation: radar-spin 4.5s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+.radar-object {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.radar-dot,
+.radar-object {
+  display: inline-block;
+}
+
+.radar-player {
+  color: #f5fcff;
+  background: #f5fcff;
+}
+
+.radar-prey {
+  color: #7af4ff;
+  background: #7af4ff;
+}
+
+.radar-predator {
+  color: #ff7a8f;
+  background: #ff7a8f;
+}
+
+.radar-corpse {
+  color: #d8bc7f;
+  background: #d8bc7f;
+}
+
+.fish-world-radar-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  font-size: 0.76rem;
+  color: #daf9ff;
+}
+
+.fish-world-radar-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fish-world-radar-legend .radar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
 h1,
 h2,
 p {
@@ -822,6 +1028,16 @@ button:active {
   100% {
     left: 104%;
     opacity: 0;
+  }
+}
+
+@keyframes radar-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
   }
 }
 

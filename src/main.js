@@ -1,4 +1,4 @@
 import "./styles.css";
-import { createGame } from "./game/createGame.js";
+import { AppController } from "./app/AppController.js";
 
-createGame();
+new AppController();

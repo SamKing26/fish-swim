@@ -193,17 +193,6 @@ export class FishSwimScene extends Phaser.Scene {
       });
     }
 
-    this.hud.bindStart(async (username) => {
-      this.input.keyboard.enabled = true;
-      this.audioManager.resume();
-      await this.hud.enterImmersiveMode();
-      this.audioManager.playButton();
-      this.currentUsername = (username || "Player").slice(0, 16);
-      window.localStorage.setItem(USERNAME_KEY, this.currentUsername);
-      this.hud.setUsername(this.currentUsername);
-      this.startRun();
-    });
-
     this.hud.bindRestart(async () => {
       this.audioManager.resume();
       await this.hud.enterImmersiveMode();
@@ -230,6 +219,17 @@ export class FishSwimScene extends Phaser.Scene {
       this.audioManager.playButton();
       this.backToLobby();
     });
+  }
+
+  async startArcadeMode(username) {
+    this.input.keyboard.enabled = true;
+    this.audioManager.resume();
+    await this.hud.enterImmersiveMode();
+    this.audioManager.playButton();
+    this.currentUsername = (username || "Player").slice(0, 16);
+    window.localStorage.setItem(USERNAME_KEY, this.currentUsername);
+    this.hud.setUsername(this.currentUsername);
+    this.startRun();
   }
 
   createCollisions() {

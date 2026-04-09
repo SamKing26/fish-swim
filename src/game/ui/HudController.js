@@ -19,10 +19,6 @@ export class HudController {
     this.displayedBestScore = 0;
   }
 
-  bindStart(handler) {
-    this.startButton.addEventListener("click", () => handler(this.getUsername()));
-  }
-
   bindRestart(handler) {
     this.restartButton.addEventListener("click", handler);
   }

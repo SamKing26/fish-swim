@@ -45,6 +45,7 @@
   <div id="app">
     <div id="game-shell">
       <div id="game"></div>
+      <div id="fish-world-root" class="fish-world-root hidden"></div>
       <button id="menu-button" class="menu-button hidden" type="button" aria-label="Open menu">
         <span></span>
         <span></span>
@@ -108,8 +109,37 @@
           <section class="panel landing-mode-card landing-mode-card-soon">
             <div class="landing-mode-kicker">Mode</div>
             <h2>Fish World</h2>
-            <button type="button" disabled>Coming Soon</button>
+            <button id="fish-world-button" type="button">Open Prototype</button>
           </section>
+        </div>
+      </div>
+      <div id="fish-world-ui" class="fish-world-ui hidden">
+        <div class="fish-world-status panel">
+          <div class="fish-world-status-kicker">Fish World</div>
+          <div id="fish-world-phase" class="fish-world-phase">Tiny</div>
+          <div class="fish-world-stats">
+            <div><span>HP</span><strong id="fish-world-hp">24 / 24</strong></div>
+            <div><span>Growth</span><strong id="fish-world-growth">0 / 100</strong></div>
+            <div><span>Evolution</span><strong id="fish-world-evolution">0 / 3</strong></div>
+            <div><span>Region</span><strong id="fish-world-region">Shallow Reef</strong></div>
+          </div>
+        </div>
+        <div class="fish-world-hint panel">
+          <div class="fish-world-hint-title">Prototype</div>
+          <p id="fish-world-message">Swim, hunt prey, avoid predators, and grow. Fish World is a Three.js prototype path for the future 3D mode.</p>
+          <button id="fish-world-lobby-button" class="ghost-button" type="button">Back to Lobby</button>
+        </div>
+        <div class="fish-world-radar panel">
+          <div class="fish-world-radar-title">Radar</div>
+          <div id="fish-world-radar-scope" class="fish-world-radar-scope">
+            <div class="radar-sweep"></div>
+          </div>
+          <div class="fish-world-radar-legend">
+            <span><i class="radar-dot radar-player"></i>Player</span>
+            <span><i class="radar-dot radar-prey"></i>Prey</span>
+            <span><i class="radar-dot radar-predator"></i>Predator</span>
+            <span><i class="radar-dot radar-corpse"></i>Corpse</span>
+          </div>
         </div>
       </div>
       <div id="game-over-overlay" class="overlay">

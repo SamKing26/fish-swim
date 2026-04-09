@@ -3,8 +3,9 @@
 This folder is reserved for the future `Fish World` mode.
 
 Current status:
-- not implemented
-- not connected to runtime
+- early prototype implemented
+- connected to landing page routing
+- still isolated from `Arcade Mode` runtime
 - safe to evolve without affecting `Arcade Mode`
 
 ## Intended Stack
@@ -30,3 +31,13 @@ Current status:
 ## Rule
 
 Do not import this folder into the current Phaser runtime until the Fish World entrypoint is intentionally added.
+
+## Current Prototype Features
+
+- Three.js runtime bootstrap
+- separate route from landing page
+- player fish movement and follow camera
+- prey / predator / corpse placeholders
+- bite, damage, growth, heal, and early evolution loop
+- radar and survival HUD
+- `.glb` placeholder asset pipeline for future model replacement
